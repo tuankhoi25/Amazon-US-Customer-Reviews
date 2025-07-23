@@ -8,8 +8,18 @@ wheels/
 
 # Virtual environments
 .venv
-.python-version
-uv.lock
 
 # MacOS files
 .DS_Store
+
+# Environment variables
+.env
+
+# Dataset
+data_source
+
+# Spark artifacts
+artifacts
+
+# Jupyter Notebook for development
+a.ipynb
