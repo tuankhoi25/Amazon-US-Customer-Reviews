@@ -16,10 +16,11 @@ wheels/
 .env
 
 # Dataset
-data_source
+data_source/custom_kaggle_datasets/
+data_source/processed_datasets/
 
 # Spark artifacts
-artifacts
+artifacts/
 
-# Jupyter Notebook for development
-a.ipynb
+# Jupyter Notebook folder for testing
+notebook_testing/
