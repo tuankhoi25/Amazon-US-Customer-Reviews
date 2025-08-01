@@ -24,3 +24,6 @@ artifacts/
 
 # Jupyter Notebook folder for testing
 notebook_testing/
+
+# .python-version file
+.python-version
