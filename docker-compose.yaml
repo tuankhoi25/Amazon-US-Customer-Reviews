@@ -1,36 +1,232 @@
 services:
   postgres:
-    image: postgres:14
     container_name: postgres
+    image: postgres:14
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - 5432:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./data_source/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
-      - ./data_source/import_reviews.sh:/docker-entrypoint-initdb.d/02_import_reviews.sh:ro
-      - ./data_source/processed_datasets:/docker-entrypoint-initdb.d/data/processed_datasets:ro
-      - ./data_source/custom_kaggle_datasets:/docker-entrypoint-initdb.d/data/custom_kaggle_datasets:ro
-    command:
-      - postgres
-      - -c
-      - max_wal_size=2GB
-      - -c
-      - checkpoint_timeout=10min
-      - -c
-      - checkpoint_completion_target=0.7
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d postgres']
       interval: 10s
       timeout: 8s
       retries: 5
 
+  minio:
+    container_name: minio
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_REGION: ${MINIO_REGION}
+    ports:
+      - 9000:9000
+      - 9001:9001
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 8s
+      retries: 5
+
+  minio-init:
+    container_name: minio-init
+    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
+    entrypoint: |
+      /bin/sh -c "
+      /usr/bin/mc alias set minio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc anonymous set public minio/warehouse;
+      "
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  nessie:
+    container_name: nessie
+    image: ghcr.io/projectnessie/nessie:0.103.3
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      NESSIE_VERSION_STORE_TYPE: ${NESSIE_VERSION_STORE_TYPE}
+      NESSIE_VERSION_STORE_PERSIST_JDBC_DATASOURCE: ${NESSIE_VERSION_STORE_PERSIST_JDBC_DATASOURCE}
+      QUARKUS_DATASOURCE_POSTGRESQL_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      QUARKUS_DATASOURCE_POSTGRESQL_USERNAME: ${POSTGRES_USER}
+      QUARKUS_DATASOURCE_POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - 19120:19120
+      - 9005:9000
+    healthcheck:
+      test: "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /q/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"
+      interval: 5s
+      timeout: 2s
+      retries: 15
+
+  trino-coordinator:
+    container_name: trino-coordinator
+    image: trinodb/trino:476
+    ports:
+      - 8085:8080
+    depends_on:
+      nessie:
+        condition: service_healthy
+    volumes:
+      - ./trino_config/coordinator/etc/trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
+      - ./trino_config/coordinator/etc/trino/config.properties:/etc/trino/config.properties
+      - ./trino_config/coordinator/etc/trino/node.properties:/etc/trino/node.properties
+      - trino-coordinator-data:/data/trino
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  trino-worker-1:
+    container_name: trino-worker-1
+    image: trinodb/trino:476
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+    volumes:
+      - ./trino_config/worker_1/etc/trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
+      - ./trino_config/worker_1/etc/trino/config.properties:/etc/trino/config.properties
+      - ./trino_config/worker_1/etc/trino/node.properties:/etc/trino/node.properties
+      - trino-worker-1-data:/data/trino
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  trino-worker-2:
+    container_name: trino-worker-2
+    image: trinodb/trino:476
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+    volumes:
+      - ./trino_config/worker_2/etc/trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
+      - ./trino_config/worker_2/etc/trino/config.properties:/etc/trino/config.properties
+      - ./trino_config/worker_2/etc/trino/node.properties:/etc/trino/node.properties
+      - trino-worker-2-data:/data/trino
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  spark-master:
+    container_name: spark-master
+    hostname: spark-master
+    image: apache/spark:3.5.0-scala2.12-java11-python3-r-ubuntu
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    environment:
+      AWS_REGION: ${MINIO_REGION}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
+      NESSIE_URI: ${NESSIE_URI}
+      WAREHOUSE: ${WAREHOUSE}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - 4040:4040
+      - 8080:8080
+      - 7077:7077
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  spark-worker-1:
+    container_name: spark-worker-1
+    image: apache/spark:3.5.0-scala2.12-java11-python3-r-ubuntu
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8081 spark://spark-master:7077
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    environment:
+      AWS_REGION: ${MINIO_REGION}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
+      NESSIE_URI: ${NESSIE_URI}
+      WAREHOUSE: ${WAREHOUSE}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - 8081:8081
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8081"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  spark-worker-2:
+    container_name: spark-worker-2
+    image: apache/spark:3.5.0-scala2.12-java11-python3-r-ubuntu
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8082 spark://spark-master:7077
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    environment:
+      AWS_REGION: ${MINIO_REGION}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
+      NESSIE_URI: ${NESSIE_URI}
+      WAREHOUSE: ${WAREHOUSE}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - 8082:8082
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8082"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notebook:
+    container_name: notebook
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pyspark-notebook
+    ports:
+      - 8888:8888
+    environment:
+      AWS_REGION: ${MINIO_REGION}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
+      NESSIE_URI: ${NESSIE_URI}
+      WAREHOUSE: ${WAREHOUSE}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      spark-worker-1:
+        condition: service_healthy
+    volumes:
+      - ./notebooks:/app
+
 volumes:
+  minio_data:
+    name: minio_data
   postgres_data:
     name: postgres_data
+  trino-coordinator-data:
+    name: trino-coordinator-data
+  trino-worker-1-data:
+    name: trino-worker-1-data
+  trino-worker-2-data:
+    name: trino-worker-2-data
 
 networks:
   default:
