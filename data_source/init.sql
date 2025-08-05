@@ -1,3 +1,5 @@
+CREATE DATABASE nessie;
+
 CREATE TABLE IF NOT EXISTS customer (
     id BIGSERIAL PRIMARY KEY,
     name TEXT,

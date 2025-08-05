@@ -18,6 +18,7 @@ wheels/
 # Dataset
 data_source/custom_kaggle_datasets/
 data_source/processed_datasets/
+data_source/postgres_data/
 
 # Spark artifacts
 artifacts/

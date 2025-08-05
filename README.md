@@ -7,7 +7,13 @@ Lưu ý: vì vấn đề bản quyền của bộ dữ liệu của Amazon nên 
 
 Sau khi giảm độ lớn của dữ liệu xuống mức phù hợp với máy tính cá nhân và generate thêm thông tin về khách hàng và giá sản phẩm bằng [thư viện Faker](https://faker.readthedocs.io/en/master/index.html) và tiến hành chuẩn hoá cơ sở dữ liệu cho phù hợp với OLTP thì ta có như sau:
 
-![Ảnh màn hình 2025-07-19 lúc 16.33.02.png](https://github.com/user-attachments/assets/8f23d828-910e-4239-8b98-43895d368bcf)
+![OLTP Data Model](https://github.com/user-attachments/assets/8f23d828-910e-4239-8b98-43895d368bcf)
+----
+
+# Lakehouse Architecture
+
+![Lakehouse Architecture](https://github.com/user-attachments/assets/bc8b8545-d4fa-4e14-aaa5-d8a64690b349)
+----
 
 # Cách kết nối Trino với DBeaver
 1. Cài đặt DBeaver
@@ -26,6 +32,7 @@ Sau khi giảm độ lớn của dữ liệu xuống mức phù hợp với máy
    - Lưu và kết nối
    - Bấm OK để lưu cấu hình và bắt đầu kết nối
 
+----
 # Tài liệu tham khảo
 
 [Config spark with local mode](https://www.linkedin.com/pulse/creating-local-data-lakehouse-using-alex-merced/)
