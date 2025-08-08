@@ -19,12 +19,13 @@ wheels/
 data_source/custom_kaggle_datasets/
 data_source/processed_datasets/
 data_source/postgres_data/
+data_source/data_source_backup/
 
 # Spark artifacts
 artifacts/
 
-# Jupyter Notebook folder for testing
-notebook_testing/
-
 # .python-version file
 .python-version
+
+# Testing jupyter notebook file
+a.ipynb

@@ -7,12 +7,12 @@ Lưu ý: vì vấn đề bản quyền của bộ dữ liệu của Amazon nên 
 
 Sau khi giảm độ lớn của dữ liệu xuống mức phù hợp với máy tính cá nhân và generate thêm thông tin về khách hàng và giá sản phẩm bằng [thư viện Faker](https://faker.readthedocs.io/en/master/index.html) và tiến hành chuẩn hoá cơ sở dữ liệu cho phù hợp với OLTP thì ta có như sau:
 
-![OLTP Data Model](https://github.com/user-attachments/assets/8f23d828-910e-4239-8b98-43895d368bcf)
+![OLTP Data Model](https://github.com/user-attachments/assets/ba67e871-76a8-4cf3-ae74-720949e1bbec)
 ----
 
 # Lakehouse Architecture
 
-![Lakehouse Architecture](https://github.com/user-attachments/assets/bc8b8545-d4fa-4e14-aaa5-d8a64690b349)
+![Lakehouse Architecture](https://github.com/user-attachments/assets/073bae5c-8b55-4d9b-86a2-b127a48c952d)
 ----
 
 # Cách kết nối Trino với DBeaver
@@ -48,3 +48,5 @@ Sau khi giảm độ lớn của dữ liệu xuống mức phù hợp với máy
 [Tham khảo config minio](https://trino.io/docs/current/object-storage/file-system-s3.html)
 
 [Tham khảo triển khai cluster trino](https://trino.io/docs/current/installation/deployment.html)
+
+[Sử dụng spark với iceberg extension](https://iceberg.apache.org/docs/nightly/spark-getting-started/)

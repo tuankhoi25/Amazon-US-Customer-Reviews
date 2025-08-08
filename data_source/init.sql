@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS customer (
     mail TEXT,
     birthdate DATE,
     login_username TEXT,
-    login_password TEXT
+    login_password TEXT,
+    created_at DATE,
+    updated_at DATE
 );
 
 CREATE TABLE IF NOT EXISTS location (
@@ -16,19 +18,25 @@ CREATE TABLE IF NOT EXISTS location (
     city TEXT,
     state TEXT,
     zipcode INT,
-    country TEXT
+    country TEXT,
+    created_at DATE,
+    updated_at DATE
 );
 
 CREATE TABLE IF NOT EXISTS customer_location (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT REFERENCES customer(id),
-    location_id UUID REFERENCES location(id)
+    location_id UUID REFERENCES location(id),
+    created_at DATE,
+    updated_at DATE
 );
 
 CREATE TABLE IF NOT EXISTS customer_phone (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT REFERENCES customer(id),
-    phone_number TEXT
+    phone_number TEXT,
+    created_at DATE,
+    updated_at DATE
 );
 
 CREATE TABLE IF NOT EXISTS product (
@@ -44,18 +52,23 @@ CREATE TABLE IF NOT EXISTS shadow_product (
     product_title TEXT,
     currency VARCHAR(15),
     price DECIMAL(10, 2),
+    created_at DATE,
     updated_at DATE
 );
 
 CREATE TABLE IF NOT EXISTS category (
     id BIGSERIAL PRIMARY KEY,
-    category_name TEXT
+    category_name TEXT,
+    created_at DATE,
+    updated_at DATE
 );
 
 CREATE TABLE IF NOT EXISTS product_category (
     id BIGSERIAL PRIMARY KEY,
     product_id TEXT REFERENCES product(id),
-    category_id BIGINT REFERENCES category(id)
+    category_id BIGINT REFERENCES category(id),
+    created_at DATE,
+    updated_at DATE
 );
 
 CREATE TABLE IF NOT EXISTS review (
@@ -69,29 +82,30 @@ CREATE TABLE IF NOT EXISTS review (
     verified_purchase CHAR(1),
     review_headline TEXT,
     review_body TEXT,
-    review_date DATE
+    created_at DATE,
+    updated_at DATE
 );
 
 \echo 'IMPORTING DATA...'
 
 \echo 'Import customer table...'
-COPY customer(name, sex, login_username, mail, birthdate, login_password, id)
+COPY customer(id, name, sex, login_username, mail, birthdate, login_password, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/customer.csv'
 DELIMITER ',' CSV HEADER;
 
 \echo 'Import location table...'
-COPY location(street_address, city, state, zipcode, country, id)
+COPY location(id, street_address, city, state, zipcode, country, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/location.csv'
 DELIMITER ',' CSV HEADER
 ESCAPE '\';
 
 \echo 'Import customer_location table...'
-COPY customer_location(customer_id, id, location_id)
+COPY customer_location(customer_id, id, location_id, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/customer_location.csv'
 DELIMITER ',' CSV HEADER;
 
 \echo 'Import customer_phone table...'
-COPY customer_phone(phone_number, customer_id, id)
+COPY customer_phone(customer_id, phone_number, id, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/customer_phone.csv'
 DELIMITER ',' CSV HEADER;
 
@@ -107,7 +121,7 @@ WITH (
 );
 
 \echo 'Import shadow_product table...'
-COPY shadow_product(product_id, product_title, price, currency, updated_at, id)
+COPY shadow_product(product_id, product_title, price, currency, id, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/shadow_product.tsv'
 WITH (
     FORMAT csv,
@@ -118,11 +132,11 @@ WITH (
 );
 
 \echo 'Import category table...'
-COPY category(category_name, id)
+COPY category(category_name, id, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/category.csv'
 DELIMITER ',' CSV HEADER;
 
 \echo 'Import product_category table...'
-COPY product_category(product_id, category_id, id)
+COPY product_category(product_id, category_id, id, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/product_category.csv'
 DELIMITER ',' CSV HEADER;
