@@ -8,3 +8,5 @@ dotenv==0.9.9
 Faker==35.2.2
 pyspark==3.5.0
 pyiceberg==0.7.1
+jupyterlab-lsp==5.1.0
+python-lsp-server==1.12.0

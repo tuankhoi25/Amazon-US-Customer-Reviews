@@ -62,7 +62,7 @@ services:
 
   nessie:
     container_name: nessie
-    image: ghcr.io/projectnessie/nessie:0.103.3
+    image: ghcr.io/projectnessie/nessie:0.104.3
     depends_on:
       minio-init:
         condition: service_completed_successfully
@@ -119,22 +119,24 @@ services:
       timeout: 5s
       retries: 5
 
-  trino-worker-2:
-    container_name: trino-worker-2
-    image: trinodb/trino:476
-    depends_on:
-      trino-coordinator:
-        condition: service_healthy
-    volumes:
-      - ./trino_config/worker_2/etc/trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
-      - ./trino_config/worker_2/etc/trino/config.properties:/etc/trino/config.properties
-      - ./trino_config/worker_2/etc/trino/node.properties:/etc/trino/node.properties
-      - trino-worker-2-data:/data/trino
-    healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8080/v1/info"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # trino-worker-2:
+  #   container_name: trino-worker-2
+  #   image: trinodb/trino:476
+  #   depends_on:
+  #     trino-coordinator:
+  #       condition: service_healthy
+  #   environment:
+  #     JAVA_TOOL_OPTIONS: "-Xmx512m -Xms512m"
+  #   volumes:
+  #     - ./trino_config/worker_2/etc/trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
+  #     - ./trino_config/worker_2/etc/trino/config.properties:/etc/trino/config.properties
+  #     - ./trino_config/worker_2/etc/trino/node.properties:/etc/trino/node.properties
+  #     - trino-worker-2-data:/data/trino
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-fs", "http://localhost:8080/v1/info"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
   spark-master:
     container_name: spark-master
@@ -182,28 +184,28 @@ services:
       timeout: 5s
       retries: 5
 
-  spark-worker-2:
-    container_name: spark-worker-2
-    image: apache/spark:3.5.0-scala2.12-java11-python3-r-ubuntu
-    command: >
-      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8082 spark://spark-master:7077
-    depends_on:
-      spark-master:
-        condition: service_healthy
-    environment:
-      AWS_REGION: ${MINIO_REGION}
-      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
-      NESSIE_URI: ${NESSIE_URI}
-      WAREHOUSE: ${WAREHOUSE}
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
-    ports:
-      - 8082:8082
-    healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8082"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # spark-worker-2:
+  #   container_name: spark-worker-2
+  #   image: apache/spark:3.5.0-scala2.12-java11-python3-r-ubuntu
+  #   command: >
+  #     /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8082 spark://spark-master:7077
+  #   depends_on:
+  #     spark-master:
+  #       condition: service_healthy
+  #   environment:
+  #     AWS_REGION: ${MINIO_REGION}
+  #     AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
+  #     NESSIE_URI: ${NESSIE_URI}
+  #     WAREHOUSE: ${WAREHOUSE}
+  #     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+  #     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+  #   ports:
+  #     - 8082:8082
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-fs", "http://localhost:8082"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
   notebook:
     container_name: notebook
@@ -228,6 +230,32 @@ services:
     volumes:
       - ./notebooks:/app
 
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase
+    hostname: metabase
+    depends_on:
+      postgres:
+          condition: service_healthy
+      trino-worker-1:
+        condition: service_healthy
+      # trino-worker-2:
+      #   condition: service_healthy
+    ports:
+      - 3000:3000
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: ${POSTGRES_DB_FOR_METABASE}
+      MB_DB_PORT: 5432
+      MB_DB_USER: ${POSTGRES_USER}
+      MB_DB_PASS: ${POSTGRES_PASSWORD}
+      MB_DB_HOST: postgres
+    healthcheck:
+      test: curl --fail -I http://localhost:3000/api/health || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   minio_data:
     name: minio_data
@@ -235,8 +263,8 @@ volumes:
     name: trino-coordinator-data
   trino-worker-1-data:
     name: trino-worker-1-data
-  trino-worker-2-data:
-    name: trino-worker-2-data
+  # trino-worker-2-data:
+  #   name: trino-worker-2-data
 
 networks:
   default:

@@ -1,4 +1,5 @@
 CREATE DATABASE nessie;
+CREATE DATABASE metabaseappdb;
 
 CREATE TABLE IF NOT EXISTS customer (
     id BIGSERIAL PRIMARY KEY,
@@ -31,10 +32,17 @@ CREATE TABLE IF NOT EXISTS customer_location (
     updated_at DATE
 );
 
+CREATE TABLE IF NOT EXISTS phone_number (
+    id UUID PRIMARY KEY,
+    phone_number TEXT,
+    created_at DATE,
+    updated_at DATE
+);
+
 CREATE TABLE IF NOT EXISTS customer_phone (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT REFERENCES customer(id),
-    phone_number TEXT,
+    phone_id UUID REFERENCES phone_number(id),
     created_at DATE,
     updated_at DATE
 );
@@ -104,8 +112,13 @@ COPY customer_location(customer_id, id, location_id, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/customer_location.csv'
 DELIMITER ',' CSV HEADER;
 
+\echo 'Import phone_number table...'
+COPY phone_number(id, phone_number, created_at, updated_at)
+FROM '/docker-entrypoint-initdb.d/data/processed_datasets/phone_number.csv'
+DELIMITER ',' CSV HEADER;
+
 \echo 'Import customer_phone table...'
-COPY customer_phone(customer_id, phone_number, id, created_at, updated_at)
+COPY customer_phone(customer_id, phone_id, id, created_at, updated_at)
 FROM '/docker-entrypoint-initdb.d/data/processed_datasets/customer_phone.csv'
 DELIMITER ',' CSV HEADER;
 
