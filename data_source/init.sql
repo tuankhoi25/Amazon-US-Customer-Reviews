@@ -1,5 +1,7 @@
 CREATE DATABASE nessie;
 CREATE DATABASE metabaseappdb;
+CREATE USER airflow WITH PASSWORD 'airflow';
+CREATE DATABASE airflow OWNER airflow;
 
 CREATE TABLE IF NOT EXISTS customer (
     id BIGSERIAL PRIMARY KEY,

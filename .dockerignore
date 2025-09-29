@@ -1,5 +1,3 @@
-# Ignore everything
-**
-
-# Except the following files
-!requirements.txt
+data_source/
+notebooks/
+trino_config/

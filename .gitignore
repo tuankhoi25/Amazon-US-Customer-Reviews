@@ -31,3 +31,5 @@ artifacts/
 a.ipynb
 
 HH/
+
+airflow/logs/
