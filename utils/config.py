@@ -25,24 +25,26 @@ class Settings(BaseSettings):
 
     # Spark settings
     SPARK_MASTER: str = "spark://spark-master:7077"
-    SPARK_JARS_PACKAGES: List[str] = []
-    SPARK_SQL_EXTENSIONS: List[str] = []
-    SPARK_SQL_CATALOG_NESSIE: str = "org.apache.iceberg.spark.SparkCatalog"
-    SPARK_SQL_CATALOG_NESSIE_URI: str = "http://nessie:19120/api/v2"
-    SPARK_SQL_CATALOG_NESSIE_CLIENT__API__VERSION: str = "2"
-    SPARK_SQL_CATALOG_NESSIE_REF: str = "main"
-    SPARK_SQL_CATALOG_NESSIE_AUTHENTICATION_TYPE: str = "NONE"
-    SPARK_SQL_CATALOG_NESSIE_CATALOG__IMPL: str = "org.apache.iceberg.nessie.NessieCatalog"
-    SPARK_SQL_CATALOG_NESSIE_S3_ENDPOINT: str = "http://minio:9000"
-    SPARK_SQL_CATALOG_NESSIE_WAREHOUSE: str = "s3a://warehouse/"
-    SPARK_SQL_CATALOG_NESSIE_S3_PATH__STYLE__ACCESS: str = "true"
-    SPARK_SQL_CATALOG_NESSIE_S3_ACCESS__KEY__ID: str = "minioadmin"
-    SPARK_SQL_CATALOG_NESSIE_S3_SECRET__ACCESS__KEY: str = "minioadmin"
-    SPARK_SQL_CATALOG_NESSIE_IO__IMPL: str = "org.apache.iceberg.aws.s3.S3FileIO"
-    SPARK_SQL_ICEBERG_MERGE__SCHEMA: str = "true"
-    SPARK_EXECUTOR_MEMORY: str = "2g"
-    SPARK_DRIVER_MEMORY: str = "2g"
-    SPARK_EXECUTOR_CORES: str = "2"
+    spark_jars_packages: List[str] = []
+    spark_sql_extensions: List[str] = []
+    spark_sql_catalog_nessie: str = "org.apache.iceberg.spark.SparkCatalog"
+    spark_sql_catalog_nessie_uri: str = "http://nessie:19120/api/v2"
+    spark_sql_catalog_nessie_client__api__version: str = "2"
+    spark_sql_catalog_nessie_ref: str = "main"
+    sql_sql_catalog_nessie_authentication_type: str = "NONE"
+    spark_sql_catalog_nessie_catalog__impl: str = "org.apache.iceberg.nessie.NessieCatalog"
+    spark_sql_catalog_nessie_s3_endpoint: str = "http://minio:9000"
+    spark_sql_catalog_nessie_warehouse: str = "s3a://warehouse/"
+    spark_sql_catalog_nessie_s3_path__style__access: str = "true"
+    spark_sql_catalog_nessie_s3_access__key__id: str = "minioadmin"
+    spark_sql_catalog_nessie_s3_secret__access__key: str = "minioadmin"
+    spark_sql_catalog_nessie_io__impl: str = "org.apache.iceberg.aws.s3.S3FileIO"
+    spark_driver_extraJavaOptions: str = "-Daws.region=us-east-1"
+    spark_executor_extraJavaOptions: str = "-Daws.region=us-east-1"
+    spark_sql_iceberg_merge__schema: str = "true"
+    spark_executor_memory: str = "2g"
+    spark_driver_memory: str = "2g"
+    spark_executor_cores: str = "2"
     
     class Config:
         env_file = "./.env"

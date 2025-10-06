@@ -1,5 +1,4 @@
-from utils.scd_utils import scd2, switch_bk_sk
-from utils.spark_utils import get_spark_session
+from utils.scd_utils import apply_scd2, switch_bk_sk
 from pyspark.sql import SparkSession
 
 def build_bridge_customer_location(spark: SparkSession):    
@@ -22,7 +21,7 @@ def build_bridge_customer_location(spark: SparkSession):
         sk_name="location_key"
     )
 
-    scd2(
+    apply_scd2(
         spark=spark,
         source=customer_location,
         target=bridge_customer_location,
@@ -31,5 +30,3 @@ def build_bridge_customer_location(spark: SparkSession):
         bk_name="customer_location_id",
         sk_name="customer_location_key"
     )
-
-    spark.stop()

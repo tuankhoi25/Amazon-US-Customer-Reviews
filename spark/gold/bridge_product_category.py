@@ -1,5 +1,4 @@
-from utils.scd_utils import SCD1, switch_bk_sk
-from utils.spark_utils import get_spark_session
+from utils.scd_utils import apply_scd1, switch_bk_sk
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
 
@@ -21,7 +20,7 @@ def build_bridge_product_category(spark: SparkSession):
         bk_name="product_id", 
         sk_name="product_key"
     )
-    SCD1(
+    apply_scd1(
         spark=spark,
         source=product_category,
         target=bridge_product_category,
@@ -30,4 +29,3 @@ def build_bridge_product_category(spark: SparkSession):
         bk_name="product_category_id",
         sk_name="product_category_key"
     )
-    spark.stop()

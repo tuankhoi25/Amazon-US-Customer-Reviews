@@ -1,9 +1,7 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import *
 from pyspark.sql import DataFrame
-from pyspark.sql import functions as F
 from pyspark.sql.window import Window
-from pyspark.sql.functions import row_number, col, max
+from pyspark.sql.functions import row_number, col, max, when, lag, lit
 from typing import List
 import textwrap
 
@@ -44,7 +42,7 @@ def switch_bk_sk(
 # -> Xài MERGE INTO vô tư mà không cần phải xử lý deduplicate
 # Còn nếu SCD1 nhưng ở OLTP lỡ bật CDC thì chỉ cần xử lý deduplicate bằng cách chỉ lấy dim_ID có updated_at lớn nhất
 # Lưu ý: schema của Dim này chỉ hơn cái schema ở silver mỗi cái key thôi
-def SCD1(
+def apply_scd1(
     spark: SparkSession,
     source: DataFrame,
     source_name: str,
@@ -77,7 +75,7 @@ def SCD1(
     return True
 
 
-def scd2(
+def apply_scd2(
     spark: SparkSession,
     source: DataFrame,
     source_name: str,
@@ -90,8 +88,8 @@ def scd2(
     source = generate_surrogate_key(source=source, target=target, sk_name=sk_name, sort_cols=[bk_name])
 
     # Tạo df chỉ chứa phiên bản cũ nhất của ID trong source table và Cập nhật bản mới nhất ở dim thành bản cũ
-    w = Window.partitionBy(bk_name).orderBy(F.col("source_updated_at").asc())
-    earliest_record_in_source = source.withColumn("rn", F.row_number().over(w)).filter(F.col("rn") == 1).drop("rn")
+    w = Window.partitionBy(bk_name).orderBy(col("source_updated_at").asc())
+    earliest_record_in_source = source.withColumn("rn", row_number().over(w)).filter(col("rn") == 1).drop("rn")
     earliest_record_in_source.createOrReplaceTempView(source_name)
 
     expr = textwrap.dedent(f"""
@@ -101,21 +99,21 @@ def scd2(
         WHEN MATCHED AND g.is_current = True THEN 
             UPDATE SET g.is_current = False, g.valid_to = s.source_updated_at
     """)
-    df = spark.sql(expr)
+    spark.sql(expr)
     spark.catalog.dropTempView(source_name)
 
     # Insert toàn bộ source vào target
-    w = Window.partitionBy(bk_name).orderBy(F.col("source_updated_at").desc())
+    w = Window.partitionBy(bk_name).orderBy(col("source_updated_at").desc())
     source = source \
                     .withColumn("valid_from", col("source_updated_at")) \
-                    .withColumn("valid_to", F.lag("valid_from").over(w)) \
+                    .withColumn("valid_to", lag("valid_from").over(w)) \
                     .drop("source_created_at", "source_updated_at") \
                     .withColumn("is_current", when(col("valid_to").isNull(), True).otherwise(False))
     source.writeTo(f"nessie.gold.{target_name}").append()
     return True
 
 
-def fact(
+def update_fact_table(
     spark: SparkSession,
     source: DataFrame,
     target: DataFrame,
@@ -143,7 +141,7 @@ def fact(
     
     ## Append
     if "is_current" in target.columns:
-        source = source.withColumn("is_current", F.lit(True))
+        source = source.withColumn("is_current", lit(True))
     source.writeTo(f"nessie.gold.{target_name}").append()
     
     return True

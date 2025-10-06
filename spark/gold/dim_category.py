@@ -1,11 +1,11 @@
-from utils.scd_utils import SCD1
-from utils.spark_utils import get_spark_session
+from utils.scd_utils import apply_scd1
 from pyspark.sql import SparkSession
 
 def build_dim_category(spark: SparkSession):
     category = spark.table("nessie.silver.category")
     dim_category = spark.table("nessie.gold.dim_category")
-    SCD1(
+
+    apply_scd1(
         spark=spark,
         source=category,
         target=dim_category,
@@ -14,4 +14,3 @@ def build_dim_category(spark: SparkSession):
         bk_name="category_id",
         sk_name="category_key"
     )
-    spark.stop()

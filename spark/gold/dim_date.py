@@ -2,7 +2,7 @@ import argparse
 from datetime import datetime
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, date_format, dayofmonth, month, quarter, concat, lit, year, dayofweek, weekofyear
-from utils.spark_utils import get_spark_session
+from utils.spark_utils import get_or_create_spark_session
 
 def build_dim_date(spark: SparkSession, start_date: datetime, end_date: datetime):
     start_date = start_date.strftime("%Y-%m-%d")
@@ -30,7 +30,7 @@ def main():
     parser.add_argument("--end", required=True, help="End date YYYY-MM-DD")
     args = parser.parse_args()
 
-    spark = get_spark_session("gold_dim_date")
+    spark = get_or_create_spark_session("gold_dim_date")
     start_date = datetime.strptime(args.start, "%Y-%m-%d")
     end_date = datetime.strptime(args.end, "%Y-%m-%d")
 

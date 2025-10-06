@@ -1,40 +1,30 @@
-from airflow import DAG
-from airflow.operators.python import PythonOperator
 from datetime import datetime
+from airflow.decorators import dag, task
 from init.init_schemas import init_schemas
 from init.init_tables_in_bronze import init_tables_in_bronze
 from init.init_tables_in_silver import init_tables_in_silver
 from init.init_tables_in_gold import init_tables_in_gold
+from utils.spark_utils import get_or_create_spark_session, stop_spark_session
 
-with DAG(
+
+@dag(
     dag_id="init_schemas_dag",
-    start_date=datetime(2025, 9, 28),
-    schedule_interval=None,
+    start_date=datetime(1999, 1, 1),
+    schedule=None,
     catchup=False,
-) as dag:
+    tags=["init", "schemas", "tables"],
+)
+def init_schemas_dag():
 
-    init_schemas_task = PythonOperator(
-        task_id="init_schemas",
-        python_callable=init_schemas,
-    )
+    @task
+    def init_schemas_tables():
+        spark = get_or_create_spark_session(app_name="init_schemas_tables")
+        init_schemas(spark=spark)
+        init_tables_in_bronze(spark=spark)
+        init_tables_in_silver(spark=spark)
+        init_tables_in_gold(spark=spark)
+        stop_spark_session()
 
-    init_tables_in_bronze_task = PythonOperator(
-        task_id="init_tables_in_bronze",
-        python_callable=init_tables_in_bronze,
-    )
+    init_schemas_tables()
 
-    init_tables_in_silver_task = PythonOperator(
-        task_id="init_tables_in_silver",
-        python_callable=init_tables_in_silver,
-    )
-
-    init_tables_in_gold_task = PythonOperator(
-        task_id="init_tables_in_gold",
-        python_callable=init_tables_in_gold,
-    )
-
-    init_schemas_task >> [
-        init_tables_in_bronze_task,
-        init_tables_in_silver_task,
-        init_tables_in_gold_task,
-    ]
+init_schemas_dag()

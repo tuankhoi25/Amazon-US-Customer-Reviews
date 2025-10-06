@@ -1,10 +1,8 @@
-from utils.scd_utils import switch_bk_sk, fact
-from utils.spark_utils import get_spark_session
+from utils.scd_utils import switch_bk_sk, update_fact_table
 from pyspark.sql.functions import col
 from pyspark.sql import SparkSession
 
 def build_fact_review(spark: SparkSession):
-
     review = spark.table("nessie.silver.review")
     review = review.withColumnRenamed("modified_date", "full_date")
 
@@ -34,7 +32,7 @@ def build_fact_review(spark: SparkSession):
         sk_name="date_key"
     )
 
-    fact(
+    update_fact_table(
         spark=spark,
         source=review,
         target=fact_review,
@@ -44,5 +42,3 @@ def build_fact_review(spark: SparkSession):
         sk_name="review_key",
         has_cur_col=True
     )
-
-    spark.stop()

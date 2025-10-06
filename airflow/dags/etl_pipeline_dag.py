@@ -1,32 +1,12 @@
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from utils.branch_utils import create_elt_branch, merge_elt_branch, delete_elt_branch
-from utils.spark_utils import get_spark_session
-from airflow.decorators import task
-from datetime import datetime, date
+from utils.branch_utils import create_branch, merge_branch, delete_branch, switch_to_branch
+from utils.spark_utils import get_or_create_spark_session, stop_spark_session
+from airflow.decorators import dag, task
+from datetime import datetime
 from utils.transform_utils import overwrite_table
-from spark.bronze import (
-    read, 
-    ingest
-)
-from spark.silver import (
-    transform_customer,
-    transform_product,
-    transform_review,
-    transform_location,
-    transform_product_category,
-    transform_customer_location,
-    transform_category,
-)
-from spark.gold import (
-    build_fact_review,
-    build_dim_customer,
-    build_dim_product,
-    build_dim_location,
-    build_dim_category,
-    build_bridge_customer_location,
-    build_bridge_product_category,
-)
+from utils.ingest_utils import extract_from_pg, ingest
+from spark.silver import transform_customer, transform_product, transform_review, transform_location, transform_product_category, transform_customer_location, transform_category
+from spark.gold import build_fact_review, build_dim_customer, build_dim_product, build_dim_location, build_dim_category, build_bridge_customer_location, build_bridge_product_category
+from typing import List
 
 
 BRONZE_TABLES = [
@@ -41,19 +21,9 @@ BRONZE_TABLES = [
     "shadow_product",
 ]
 
-SILVER_TABLES = [
-    "customer",
-    "product",
-    "review",
-    "location",
-    "product_category",
-    "customer_location",
-    "category",
-]
-
 SILVER_TRANSFORM_MAP = {
     "customer": (transform_customer, "nessie.silver.customer"),
-    "product": (transform_product, "nessie.silver.product"),
+    "shadow_product": (transform_product, "nessie.silver.product"),
     "review": (transform_review, "nessie.silver.review"),
     "location": (transform_location, "nessie.silver.location"),
     "product_category": (transform_product_category, "nessie.silver.product_category"),
@@ -61,17 +31,7 @@ SILVER_TRANSFORM_MAP = {
     "category": (transform_category, "nessie.silver.category"),
 }
 
-GOLD_TABLES = [
-    "dim_customer",
-    "dim_product",
-    "dim_location",
-    "dim_category",
-    "bridge_customer_location",
-    "bridge_product_category",
-    "fact_review",
-]
-
-GOLD_MAP = {
+GOLD_MERGE_MAP = {
     "dim_customer": build_dim_customer,
     "dim_product": build_dim_product,
     "dim_location": build_dim_location,
@@ -81,74 +41,110 @@ GOLD_MAP = {
     "fact_review": build_fact_review,
 }
 
-with DAG(
+SKIP_MAP_BRONZE_TO_SILVER = {
+    "category": "category",
+    "customer": "customer",
+    "customer_location": "customer_location",
+    "location": "location",
+    "product_category": "product_category",
+    "review": "review",
+    "shadow_product": "shadow_product",
+}
+
+SKIP_MAP_SILVER_TO_GOLD = {
+    "customer": "dim_customer",
+    "shadow_product": "dim_product",
+    "location": "dim_location",
+    "category": "dim_category",
+    "customer_location": "bridge_customer_location",
+    "product_category": "bridge_product_category",
+    "review": "fact_review",
+}
+
+@dag(
     dag_id="etl_pipeline_dag",
-    start_date=datetime(2025, 9, 28),
-    schedule_interval="@daily",
+    start_date=datetime(2005, 1, 1),
+    schedule=None,
     catchup=False,
-) as dag:
+)
+def etl_pipeline_dag():
     
-    create_elt_branch_task = PythonOperator(
-        task_id="create_elt_branch",
-        python_callable=create_elt_branch,
-    )
 
-    @task
-    def bronze_ingest(table_name: str, **context):
-        run_ts: datetime = context["logical_date"]
-        today: date = run_ts.date()
-        nessie_etl_branch = f"feat/etl-processing-{run_ts.strftime('%Y-%m-%d-%H-%M-%S')}"
-        spark = get_spark_session(app_name="bronze_ingest")
-        spark.sql(f"USE REFERENCE {nessie_etl_branch} IN nessie;")
+    @task()
+    def create_elt_branch_task(logical_date: datetime):
+        spark = get_or_create_spark_session(app_name="create_etl_branch")
+        etl_processing_branch_name = f"feat/etl-processing-{logical_date.strftime('%Y-%m-%d-%H-%M-%S')}"
+        create_branch(spark_session=spark, new_branch=etl_processing_branch_name, existing_branch="main")
+        stop_spark_session()
+        return etl_processing_branch_name
 
-        df = read(spark=spark, table_name=table_name, today=today)
-        ingest(table_name=table_name, df=df, ts=run_ts)
+    @task()
+    def bronze_processing(etl_pipeline_branch_name: str, logical_date: datetime):
+        skipped_bronze_tables: List[str] = []
+        spark = get_or_create_spark_session(app_name="bronze_ingest")
+        switch_to_branch(spark_session=spark, branch=etl_pipeline_branch_name)
 
-        spark.stop()
-        return f"{table_name} done"
+        for table_name in BRONZE_TABLES:
+            df = extract_from_pg(spark=spark, table_name=table_name, today=logical_date.date())
+            if df is None:
+                skipped_bronze_tables.append(SKIP_MAP_BRONZE_TO_SILVER[table_name])
+                continue
+            ingest(table_name=table_name, df=df, ts=logical_date)
+        
+        stop_spark_session()
 
-    bronze_ingest_tasks = bronze_ingest.expand(table_name=BRONZE_TABLES)
+        return skipped_bronze_tables
 
 
-    @task
-    def run_transform(table_name: str, **context):
-        run_ts: datetime = context["logical_date"]
-        today: date = run_ts.date()
-        nessie_etl_branch = f"feat/etl-processing-{run_ts.strftime('%Y-%m-%d-%H-%M-%S')}"
-        spark = get_spark_session(f"silver_{table_name}")
-        spark.sql(f"USE REFERENCE {nessie_etl_branch} IN nessie;")
+    @task()
+    def silver_processing(etl_pipeline_branch_name: str, skipped_bronze_tables: List[str], logical_date: datetime):
+        skipped_silver_tables: List[str] = [SKIP_MAP_BRONZE_TO_SILVER[table] for table in skipped_bronze_tables]
+        spark = get_or_create_spark_session("silver_transform")
 
-        df = read(spark=spark, table_name=("shadow_product" if table_name == "product" else table_name), today=today)
-        transform_func, target_table = SILVER_TRANSFORM_MAP[table_name]
+        for source_name in SILVER_TRANSFORM_MAP.keys():
+            if source_name in skipped_silver_tables:
+                continue
+            switch_to_branch(spark_session=spark, branch="main")
+            source_df = extract_from_pg(spark=spark, table_name=source_name, today=logical_date.date())
+            transform_func, target_name = SILVER_TRANSFORM_MAP[source_name]
+            target_df = transform_func(source_df)
+            switch_to_branch(spark_session=spark, branch=etl_pipeline_branch_name)
+            overwrite_table(spark_session=spark, df=target_df, full_table_name=target_name)
+        
+        stop_spark_session()
 
-        df = transform_func(df)
-        overwrite_table(spark_session=spark, df=df, full_table_name=target_table)
+        return skipped_silver_tables
 
-        spark.stop()
-        return f"{table_name} transformed"
+    @task()
+    def gold_processing(etl_pipeline_branch_name: str, skipped_silver_tables: List[str]):
+        skipped_gold_tables: List[str] = [SKIP_MAP_SILVER_TO_GOLD[table] for table in skipped_silver_tables]
+        spark = get_or_create_spark_session("gold_merge")
+        switch_to_branch(spark_session=spark, branch=etl_pipeline_branch_name)
 
-    silver_transform_tasks = run_transform.expand(table_name=SILVER_TABLES)
+        for table_name in GOLD_MERGE_MAP.keys():
+            if table_name in skipped_gold_tables:
+                continue
+            merge_func = GOLD_MERGE_MAP[table_name]
+            merge_func(spark)
 
-    @task
-    def run_gold(table_name: str, **context):
-        run_ts: datetime = context["logical_date"]
-        nessie_etl_branch = f"feat/etl-processing-{run_ts.strftime('%Y-%m-%d-%H-%M-%S')}"
-        spark = get_spark_session(f"gold_{table_name}")
-        spark.sql(f"USE REFERENCE {nessie_etl_branch} IN nessie;")
+        stop_spark_session()
 
-        GOLD_MAP[table_name](spark)
-        spark.stop()
-        return f"{table_name} built"
 
-    gold_tasks = run_gold.expand(table_name=GOLD_TABLES)
+    @task()
+    def etl_cleanup(etl_pipeline_branch_name: str):
+        spark = get_or_create_spark_session("etl_cleanup")
+        switch_to_branch(spark_session=spark, branch="main")
+        merge_branch(spark_session=spark, source_branch=etl_pipeline_branch_name, target_branch="main")
+        delete_branch(spark_session=spark, branch=etl_pipeline_branch_name)
+        stop_spark_session()
 
-    merge_elt_branch_task = PythonOperator(
-        task_id="merge_elt_branch",
-        python_callable=merge_elt_branch,
-    )
 
-    delete_elt_branch_task = PythonOperator(
-        task_id="delete_elt_branch",
-        python_callable=delete_elt_branch,
-    )
-    create_elt_branch_task >> bronze_ingest_tasks >> silver_transform_tasks >> gold_tasks >> merge_elt_branch_task >> delete_elt_branch_task
+    etl_pipeline_branch_name = create_elt_branch_task()
+    skipped_bronze_tables = bronze_processing(etl_pipeline_branch_name=etl_pipeline_branch_name)
+    skipped_silver_tables = silver_processing(etl_pipeline_branch_name=etl_pipeline_branch_name, skipped_bronze_tables=skipped_bronze_tables)
+    gold_task = gold_processing(etl_pipeline_branch_name=etl_pipeline_branch_name, skipped_silver_tables=skipped_silver_tables)
+    clean_task = etl_cleanup(etl_pipeline_branch_name=etl_pipeline_branch_name)
+
+    gold_task >> clean_task
+
+etl_pipeline_dag()

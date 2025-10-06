@@ -1,7 +1,6 @@
-from utils.spark_utils import get_spark_session
+from pyspark.sql import SparkSession
 
-def init_tables_in_silver():
-    spark = get_spark_session(app_name="init_catalog") 
+def init_tables_in_silver(spark: SparkSession):
 
     spark.sql("""
         CREATE TABLE nessie.silver.customer (
@@ -76,5 +75,3 @@ def init_tables_in_silver():
             modified_date DATE
         )
     """)
-
-    spark.stop()

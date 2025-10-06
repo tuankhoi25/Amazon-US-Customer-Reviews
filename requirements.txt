@@ -13,5 +13,3 @@ pydantic-settings==2.8.1
 setuptools==75.3.2
 wheel==0.45.1
 pip==25.0.1
-# apache-airflow==2.9.3
-# -c https://raw.githubusercontent.com/apache/airflow/constraints-2.9.3/constraints-3.8.txt

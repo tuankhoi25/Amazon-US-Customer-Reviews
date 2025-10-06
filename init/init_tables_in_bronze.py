@@ -1,7 +1,6 @@
-from utils.spark_utils import get_spark_session
+from pyspark.sql import SparkSession
 
-def init_tables_in_bronze():
-    spark = get_spark_session(app_name="init_catalog")
+def init_tables_in_bronze(spark: SparkSession):
 
     spark.sql("""
         CREATE TABLE nessie.bronze.customer (
@@ -151,5 +150,3 @@ def init_tables_in_bronze():
         USING iceberg
         TBLPROPERTIES ('write.spark.accept-any-schema'='true')
     """)
-
-    spark.stop()

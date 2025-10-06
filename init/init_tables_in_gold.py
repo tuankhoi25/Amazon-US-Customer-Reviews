@@ -1,7 +1,6 @@
-from utils.spark_utils import get_spark_session
+from pyspark.sql import SparkSession
 
-def init_tables_in_gold():
-    spark = get_spark_session(app_name="init_catalog")
+def init_tables_in_gold(spark: SparkSession):
 
     spark.sql("""
         CREATE TABLE nessie.gold.dim_customer (
@@ -104,5 +103,3 @@ def init_tables_in_gold():
             is_current BOOLEAN
         )
     """)
-
-    spark.stop()
